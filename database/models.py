@@ -291,6 +291,12 @@ class Database:
     
     def apply_to_party(self, telegram_id: int, party_id: int) -> bool:
         """Подать заявку на вступление"""
+        # Удаляем старые отклонённые/одобренные заявки
+        self.db.execute('''
+            DELETE FROM party_applications 
+            WHERE telegram_id = ? AND party_id = ? AND status != 'pending'
+        ''', (telegram_id, party_id))
+        
         try:
             self.db.execute('''
                 INSERT INTO party_applications (telegram_id, party_id)
@@ -299,6 +305,7 @@ class Database:
             self.db.commit()
             return True
         except sqlite3.IntegrityError:
+            # Заявка уже pending
             return False
     
     def get_party_applications(self, party_id: int, status: str = 'pending') -> List[Dict]:
@@ -668,3 +675,4 @@ class Database:
 
 # Глобальный экземпляр
 db = Database()
+

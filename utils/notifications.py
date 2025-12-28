@@ -8,7 +8,7 @@ from telegram.error import TelegramError
 logger = logging.getLogger(__name__)
 
 
-async def send_notification(bot: Bot, telegram_id: int, message: str, parse_mode: str = 'HTML'):
+async def send_notification(bot: Bot, telegram_id: int, message: str, parse_mode: str = 'HTML', reply_markup=None):
     """
     Отправить уведомление пользователю
     
@@ -17,12 +17,14 @@ async def send_notification(bot: Bot, telegram_id: int, message: str, parse_mode
         telegram_id: ID пользователя
         message: Текст сообщения
         parse_mode: Режим парсинга (HTML/Markdown)
+        reply_markup: Клавиатура (опционально)
     """
     try:
         await bot.send_message(
             chat_id=telegram_id,
             text=message,
-            parse_mode=parse_mode
+            parse_mode=parse_mode,
+            reply_markup=reply_markup
         )
         logger.info(f"✅ Уведомление отправлено пользователю {telegram_id}")
     except TelegramError as e:

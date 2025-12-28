@@ -24,6 +24,12 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_party_invite(update, context)
         return
     
+    # Проверка на deep link (просмотр партии)
+    if context.args and context.args[0].startswith('party_'):
+        from handlers.party.view import handle_party_deeplink
+        await handle_party_deeplink(update, context)
+        return
+    
     # Проверка на deep link (голосование)
     if context.args and context.args[0].startswith('vote_'):
         from handlers.voting.participate import handle_vote_deeplink
@@ -88,3 +94,5 @@ async def start_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
 def get_handler():
     """Возвращает обработчик команды /start"""
     return CommandHandler("start", start_command)
+
+    

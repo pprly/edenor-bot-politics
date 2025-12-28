@@ -13,12 +13,14 @@ logger = logging.getLogger(__name__)
 
 
 @require_party_leader
-async def view_applications(update: Update, context: ContextTypes.DEFAULT_TYPE):
+async def view_applications(update: Update, context: ContextTypes.DEFAULT_TYPE, party_id: int = None):
     """Просмотр заявок (только для главы)"""
     query = update.callback_query
     await query.answer()
     
-    party_id = int(query.data.split('_')[2])
+    if party_id is None:
+        party_id = int(query.data.split('_')[2])
+    
     party = db.get_party_by_id(party_id)
     
     if not party:
@@ -111,7 +113,7 @@ async def approve_application(update: Update, context: ContextTypes.DEFAULT_TYPE
         await query.answer("❌ Ошибка при одобрении", show_alert=True)
     
     # Обновляем список заявок
-    await view_applications(update, context)
+    await view_applications(update, context, party_id=app['party_id'])
 
 
 @require_party_leader
@@ -144,7 +146,7 @@ async def reject_application(update: Update, context: ContextTypes.DEFAULT_TYPE)
     logger.info(f"❌ Заявка отклонена: {app['minecraft_username']} → {party['name']}")
     
     # Обновляем список заявок
-    await view_applications(update, context)
+    await view_applications(update, context, party_id=app['party_id'])
 
 
 def get_handlers():

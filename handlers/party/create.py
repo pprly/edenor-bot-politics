@@ -17,7 +17,7 @@ from config import PARTY_MIN_MEMBERS, PARTY_CREATION_TIME_MINUTES
 logger = logging.getLogger(__name__)
 
 # Состояния
-PARTY_NAME, PARTY_IDEOLOGY, PARTY_DESCRIPTION = range(3)
+PARTY_NAME, PARTY_IDEOLOGY, PARTY_IDEOLOGY_CUSTOM, PARTY_DESCRIPTION = range(4)
 
 
 @require_auth
@@ -82,13 +82,34 @@ async def party_ideology_received(update: Update, context: ContextTypes.DEFAULT_
         await query.edit_message_text(
             "✏️ Введи свою идеологию (макс. 30 символов):"
         )
-        return PARTY_IDEOLOGY
+        return PARTY_IDEOLOGY_CUSTOM
     
     ideology = ideology_map.get(query.data, "Центризм")
     context.user_data['party_ideology'] = ideology
     
     await query.edit_message_text(
         f"✅ Идеология: <b>{ideology}</b>\n\n"
+        f"Шаг 3/3: Опиши цели и программу партии (макс. 500 символов)",
+        parse_mode='HTML'
+    )
+    
+    return PARTY_DESCRIPTION
+
+
+async def party_ideology_custom_received(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    """Получение кастомной идеологии"""
+    custom_ideology = update.message.text.strip()
+    
+    if len(custom_ideology) > 30:
+        await update.message.reply_text(
+            "❌ Слишком длинная идеология! Макс. 30 символов.\nПопробуй ещё раз:"
+        )
+        return PARTY_IDEOLOGY_CUSTOM
+    
+    context.user_data['party_ideology'] = custom_ideology
+    
+    await update.message.reply_text(
+        f"✅ Идеология: <b>{custom_ideology}</b>\n\n"
         f"Шаг 3/3: Опиши цели и программу партии (макс. 500 символов)",
         parse_mode='HTML'
     )
@@ -159,10 +180,8 @@ def get_handler():
         entry_points=[CallbackQueryHandler(create_party_start, pattern="^party_create$")],
         states={
             PARTY_NAME: [MessageHandler(filters.TEXT & ~filters.COMMAND, party_name_received)],
-            PARTY_IDEOLOGY: [
-                CallbackQueryHandler(party_ideology_received, pattern="^ideology_"),
-                MessageHandler(filters.TEXT & ~filters.COMMAND, party_name_received)
-            ],
+            PARTY_IDEOLOGY: [CallbackQueryHandler(party_ideology_received, pattern="^ideology_")],
+            PARTY_IDEOLOGY_CUSTOM: [MessageHandler(filters.TEXT & ~filters.COMMAND, party_ideology_custom_received)],
             PARTY_DESCRIPTION: [MessageHandler(filters.TEXT & ~filters.COMMAND, party_description_received)],
         },
         fallbacks=[CommandHandler("cancel", cancel_creation)],
