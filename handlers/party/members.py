@@ -13,110 +13,6 @@ logger = logging.getLogger(__name__)
 
 
 @require_party_leader
-async def kick_member_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Команда /party_kick nickname - исключить участника"""
-    telegram_id = update.effective_user.id
-    party = db.get_user_party(telegram_id)
-    
-    if not party:
-        await update.message.reply_text("❌ Ты не в партии!")
-        return
-    
-    if not context.args:
-        await update.message.reply_text(
-            "❌ Укажи никнейм игрока!\n\n"
-            "Использование: <code>/party_kick nickname</code>",
-            parse_mode='HTML'
-        )
-        return
-    
-    target_nickname = context.args[0]
-    
-    # Ищем игрока
-    cursor = db.db.execute(
-        '''SELECT u.telegram_id, u.minecraft_username 
-           FROM users u
-           JOIN party_members pm ON u.telegram_id = pm.telegram_id
-           WHERE u.minecraft_username = ? AND pm.party_id = ?''',
-        (target_nickname, party['id'])
-    )
-    target_user = cursor.fetchone()
-    
-    if not target_user:
-        await update.message.reply_text(
-            f"❌ Игрок <b>{target_nickname}</b> не найден в партии",
-            parse_mode='HTML'
-        )
-        return
-    
-    target_telegram_id = target_user[0]
-    
-    # Нельзя кикнуть самого себя
-    if target_telegram_id == telegram_id:
-        await update.message.reply_text("❌ Нельзя исключить самого себя!")
-        return
-    
-    # Подтверждение
-    context.user_data['kick_target'] = target_telegram_id
-    context.user_data['kick_nickname'] = target_nickname
-    
-    keyboard = InlineKeyboardMarkup([
-        [
-            InlineKeyboardButton("✅ Исключить", callback_data=f"confirm_kick_{party['id']}"),
-            InlineKeyboardButton("❌ Отмена", callback_data="party_my")
-        ]
-    ])
-    
-    await update.message.reply_text(
-        f"⚠️ <b>Подтверди исключение</b>\n\n"
-        f"Игрок: <b>{target_nickname}</b>\n"
-        f"Партия: <b>{party['name']}</b>\n\n"
-        f"Ты точно хочешь исключить этого участника?",
-        reply_markup=keyboard,
-        parse_mode='HTML'
-    )
-
-
-@require_party_leader
-async def confirm_kick_member(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Подтверждение исключения"""
-    query = update.callback_query
-    await query.answer()
-    
-    party_id = int(query.data.split('_')[2])
-    target_id = context.user_data.get('kick_target')
-    target_nickname = context.user_data.get('kick_nickname')
-    
-    if not target_id:
-        await query.answer("❌ Ошибка: цель не найдена", show_alert=True)
-        return
-    
-    party = db.get_party_by_id(party_id)
-    
-    # Исключаем
-    db.remove_member(target_id, party_id)
-    
-    # Уведомляем исключённого
-    await send_notification(
-        context.bot,
-        target_id,
-        f"❌ <b>Ты исключён из партии</b>\n\n"
-        f"Партия: <b>{party['name']}</b>\n\n"
-        f"Ты был исключён главой партии.",
-        parse_mode='HTML'
-    )
-    
-    await query.edit_message_text(
-        f"✅ Игрок <b>{target_nickname}</b> исключён из партии",
-        reply_markup=back_button("party_my"),
-        parse_mode='HTML'
-    )
-    
-    db.log_action(target_id, "Исключён из партии", f"Партия: {party['name']}")
-    logger.info(f"✅ {target_nickname} исключён из {party['name']}")
-
-
-@require_party_leader
 async def edit_party_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Редактор списка партии"""
     query = update.callback_query
@@ -311,8 +207,6 @@ async def do_transfer_leadership(update: Update, context: ContextTypes.DEFAULT_T
 def get_handlers():
     """Возвращает обработчики управления членами"""
     return [
-        CommandHandler("party_kick", kick_member_command),
-        CallbackQueryHandler(confirm_kick_member, pattern="^confirm_kick_"),
         CallbackQueryHandler(edit_party_list, pattern="^party_edit_list_"),
         CallbackQueryHandler(move_member_up, pattern="^list_up_"),
         CallbackQueryHandler(move_member_down, pattern="^list_down_"),

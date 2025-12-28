@@ -1,3 +1,7 @@
+#!/bin/bash
+
+# election_results.py в КОРНЕ проекта
+cat > election_results.py << 'EOF'
 """
 Скрипт подсчёта результатов выборов и формирования парламента
 """
@@ -96,3 +100,6 @@ def calculate_election_results(election_id: int):
         'passed_parties': passed_parties,
         'results_text': results_text
     }
+EOF
+
+echo "✅ election_results.py created (ROOT)"

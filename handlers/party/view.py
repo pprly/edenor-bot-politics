@@ -89,50 +89,9 @@ async def all_parties(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 
-@require_auth
-async def party_members_list(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    """Список членов партии"""
-    query = update.callback_query
-    await query.answer()
-    
-    # Извлекаем party_id из callback_data
-    data_parts = query.data.split('_')
-    party_id = int(data_parts[2])  # party_members_{id}
-    
-    party = db.get_party_by_id(party_id)
-    
-    if not party:
-        await query.answer("❌ Партия не найдена", show_alert=True)
-        return
-    
-    members = db.get_party_members(party_id)
-    
-    if not members:
-        await query.edit_message_text(
-            f"👥 <b>Члены партии {party['name']}</b>\n\n"
-            f"Пока нет членов (это странно, должен быть хотя бы ты!)",
-            reply_markup=back_button("party_my"),
-            parse_mode='HTML'
-        )
-        return
-    
-    text = f"👥 <b>Члены партии {party['name']}</b>\n\n"
-    
-    for i, member in enumerate(members, 1):
-        role_icon = "👑" if member['role'] == 'leader' else "👤"
-        text += f"{i}. {role_icon} <b>{member['minecraft_username']}</b>\n"
-    
-    await query.edit_message_text(
-        text,
-        reply_markup=back_button("party_my"),
-        parse_mode='HTML'
-    )
-
-
 def get_handlers():
     return [
         CallbackQueryHandler(politics_menu, pattern="^menu_politics$"),
         CallbackQueryHandler(my_party, pattern="^party_my$"),
         CallbackQueryHandler(all_parties, pattern="^party_list$"),
-        CallbackQueryHandler(party_members_list, pattern="^party_members_"),
     ]

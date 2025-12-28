@@ -1,5 +1,5 @@
 """
-Фоновые задачи бота - обновлённая версия
+Фоновые задачи бота
 """
 import logging
 from datetime import datetime, timedelta
@@ -8,7 +8,7 @@ from telegram import Bot
 
 from database import db
 from utils import auth_checker, send_notification
-from config import AUTH_RECHECK_DAYS, PARTY_MIN_MEMBERS, CHANNEL_ID
+from config import AUTH_RECHECK_DAYS, PARTY_MIN_MEMBERS
 
 logger = logging.getLogger(__name__)
 scheduler = AsyncIOScheduler()
@@ -44,6 +44,7 @@ async def check_party_deadlines(bot: Bot):
     """Проверка дедлайнов создания партий"""
     logger.info("⏰ Проверка дедлайнов партий...")
     
+    # Получаем незарегистрированные партии
     parties = db.get_all_parties(registered_only=False)
     
     for party in parties:
@@ -53,8 +54,9 @@ async def check_party_deadlines(bot: Bot):
         deadline = datetime.fromisoformat(party['registration_deadline'])
         
         if datetime.now() > deadline:
+            # Дедлайн истёк
             if party['members_count'] >= PARTY_MIN_MEMBERS:
-                # Регистрируем
+                # Регистрируем партию
                 db.register_party(party['id'])
                 members = db.get_party_members(party['id'])
                 
@@ -68,7 +70,7 @@ async def check_party_deadlines(bot: Bot):
                 
                 logger.info(f"✅ Партия зарегистрирована: {party['name']}")
             else:
-                # Удаляем
+                # Не набрала минимум - удаляем
                 members = db.get_party_members(party['id'])
                 
                 for member in members:
@@ -91,93 +93,21 @@ async def check_voting_deadlines(bot: Bot):
     
     for voting in votings:
         end_date = datetime.fromisoformat(voting['end_date'])
-        time_left = end_date - datetime.now()
         
         # Уведомление за час до конца
-        if timedelta(hours=0) < time_left <= timedelta(hours=1):
-            # Проверяем не отправляли ли уже
-            # Можно добавить флаг в БД, но пока просто отправим
-            try:
-                if CHANNEL_ID:
-                    await bot.send_message(
-                        chat_id=CHANNEL_ID,
-                        text=f"⏰ <b>Голосование завершается через час!</b>\n\n"
-                             f"{voting['title']}\n\n"
-                             f"Успей проголосовать!",
-                        parse_mode='HTML'
-                    )
-            except Exception as e:
-                logger.error(f"❌ Ошибка уведомления: {e}")
+        if datetime.now() + timedelta(hours=1) >= end_date and datetime.now() < end_date:
+            # TODO: Отправить уведомление в канал
+            pass
         
         # Закрытие голосования
         if datetime.now() >= end_date:
             db.close_voting(voting['id'])
-            
-            # Публикуем результаты
-            try:
-                if CHANNEL_ID:
-                    total = voting['votes_for'] + voting['votes_against']
-                    if total > 0:
-                        for_pct = (voting['votes_for'] / total) * 100
-                        against_pct = (voting['votes_against'] / total) * 100
-                    else:
-                        for_pct = against_pct = 0
-                    
-                    result = "✅ ПРИНЯТО" if voting['votes_for'] > voting['votes_against'] else "❌ ОТКЛОНЕНО"
-                    
-                    await bot.send_message(
-                        chat_id=CHANNEL_ID,
-                        text=f"📊 <b>РЕЗУЛЬТАТЫ ГОЛОСОВАНИЯ</b>\n\n"
-                             f"{voting['title']}\n\n"
-                             f"За: {voting['votes_for']} ({for_pct:.1f}%)\n"
-                             f"Против: {voting['votes_against']} ({against_pct:.1f}%)\n\n"
-                             f"<b>{result}</b>",
-                        parse_mode='HTML'
-                    )
-            except Exception as e:
-                logger.error(f"❌ Ошибка публикации результатов: {e}")
-            
             logger.info(f"✅ Голосование закрыто: {voting['title']}")
-
-
-async def check_election_deadlines(bot: Bot):
-    """Проверка дедлайнов выборов"""
-    logger.info("🗳️ Проверка дедлайнов выборов...")
-    
-    election = db.get_active_election()
-    
-    if not election:
-        return
-    
-    end_date = datetime.fromisoformat(election['end_date'])
-    
-    if datetime.now() >= end_date:
-        # Подсчитываем результаты
-        from election_results import calculate_election_results
-        
-        results = calculate_election_results(election['id'])
-        
-        if results:
-            # Публикуем в канал
-            try:
-                if CHANNEL_ID:
-                    await bot.send_message(
-                        chat_id=CHANNEL_ID,
-                        text=f"📊 <b>РЕЗУЛЬТАТЫ ВЫБОРОВ В ПАРЛАМЕНТ</b>\n\n"
-                             f"Проголосовало: {results['total_votes']}\n\n"
-                             f"{results['results_text']}\n\n"
-                             f"✅ Парламент сформирован!",
-                        parse_mode='HTML'
-                    )
-            except Exception as e:
-                logger.error(f"❌ Ошибка публикации: {e}")
-            
-            logger.info("✅ Выборы завершены, парламент сформирован")
 
 
 def start_scheduler(bot: Bot):
     """Запуск планировщика"""
-    # Проверка авторизации раз в день в 3:00
+    # Проверка авторизации раз в день
     scheduler.add_job(check_auth_status, 'cron', hour=3, args=[bot])
     
     # Проверка дедлайнов партий каждые 5 минут
@@ -185,9 +115,6 @@ def start_scheduler(bot: Bot):
     
     # Проверка голосований каждые 10 минут
     scheduler.add_job(check_voting_deadlines, 'interval', minutes=10, args=[bot])
-    
-    # Проверка выборов каждые 10 минут
-    scheduler.add_job(check_election_deadlines, 'interval', minutes=10, args=[bot])
     
     scheduler.start()
     logger.info("📊 Планировщик задач запущен")
